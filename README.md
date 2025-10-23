@@ -31,7 +31,7 @@ go mod tidy
 
 ### 3. Run the Application
 ```
-go run cmd/server/main.go
+go run cmd/product-update-service/main.go
 ```
 
 ### 4. Test the Service
