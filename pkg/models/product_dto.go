@@ -5,3 +5,9 @@ type ProductDTO struct {
 	Price     float64 `json:"price"`
 	Stock     int     `json:"stock"`
 }
+
+type Config struct {
+	Port      int
+	Workers   int
+	QueueSize int
+}

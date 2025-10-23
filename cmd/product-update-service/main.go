@@ -10,38 +10,32 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/iabdulzahid/product-update-service/internal/config"
 	"github.com/iabdulzahid/product-update-service/internal/handler"
 	"github.com/iabdulzahid/product-update-service/internal/repository"
 	"github.com/iabdulzahid/product-update-service/internal/service"
+	"github.com/iabdulzahid/product-update-service/pkg"
 	"github.com/iabdulzahid/product-update-service/pkg/queue"
 )
 
 func main() {
 	// Load configuration
-	cfg, err := config.LoadConfig("configs/config.yaml")
+	cfg, err := pkg.LoadConfig("configs/config.yaml")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	fmt.Printf("cfg: %v\n", cfg)
+
 	// Initialize store and queue
 	store := repository.NewProductStore()
 	eq := queue.NewEventQueue(cfg.QueueSize)
 
-	// Start worker pool
-	ps := service.NewProductService(store, eq, cfg.Workers)
-	// ps.StartWorkers()
+	// Create context for workers (do NOT cancel immediately)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// ps := service.NewProductService(store, eq, cfg.Workers)
+	// Start worker pool
+	ps := service.NewProductService(store, eq, cfg.Workers)
 	ps.StartWorkers(ctx)
-
-	// on graceful shutdown:
-	cancel()   // signal workers to stop (optional)
-	eq.Close() // implement Close() to close the channel safely
-	// wait for a short period for workers to finish
-
 	log.Printf("Started %d workers", cfg.Workers)
 
 	// HTTP handlers and router
@@ -61,19 +55,24 @@ func main() {
 	}()
 
 	// Handle graceful shutdown
-	gracefulShutdown(srv, 5*time.Second)
+	gracefulShutdown(srv, eq, cancel, 5*time.Second)
 }
 
-// gracefulShutdown handles SIGINT/SIGTERM and shuts down the server gracefully
-func gracefulShutdown(srv *http.Server, timeout time.Duration) {
+func gracefulShutdown(srv *http.Server, eq *queue.EventQueue, cancel context.CancelFunc, timeout time.Duration) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+	// Stop workers
+	cancel()
 
+	// Close the queue safely
+	eq.Close()
+
+	// Shutdown HTTP server
+	ctx, shutdownCancel := context.WithTimeout(context.Background(), timeout)
+	defer shutdownCancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
