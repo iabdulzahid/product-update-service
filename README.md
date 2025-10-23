@@ -55,7 +55,7 @@ curl -X POST http://localhost:8080/events \
 
 Example Response
 ```
-{ "message": "Event received and queued successfully" }
+{ status_code: 202 Accepted }
 ```
 
 ### 2. GET /products/{id}
