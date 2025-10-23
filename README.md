@@ -178,5 +178,3 @@ The test suite covers:
 - ✅ Integrate PostgreSQL with transaction management
 
 ---
-
-
